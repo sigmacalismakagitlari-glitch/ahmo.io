@@ -1,0 +1,337 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+    <meta charset="UTF-8">
+    <title>ahmo.io</title>
+    <style>
+        * { box-sizing: border-box; }
+        body {
+            margin: 0; padding: 0; background-color: #0d0e15;
+            display: flex; flex-direction: column; align-items: center; justify-content: center;
+            height: 100vh; color: #fff; font-family: 'Segoe UI', Tahoma, sans-serif;
+            overflow: hidden; user-select: none;
+        }
+
+        /* ÜST BASİT SAYAÇ */
+        #hud {
+            position: absolute; top: 15px; display: none; flex-direction: column;
+            align-items: center; z-index: 10;
+        }
+        #timerBox {
+            background: rgba(0, 0, 0, 0.85); border: 2px solid #ff4757;
+            padding: 6px 24px; border-radius: 20px; font-size: 26px;
+            font-weight: 900; letter-spacing: 2px; color: #fff; box-shadow: 0 0 15px rgba(255,71,87,0.4);
+        }
+        #roleIndicator { font-size: 14px; margin-top: 5px; font-weight: bold; }
+
+        /* MENÜ ARAYÜZÜ */
+        #menu {
+            position: absolute; display: flex; flex-direction: column;
+            align-items: center; background: #161824; padding: 35px 45px;
+            border-radius: 20px; border: 3px solid #2f3542; box-shadow: 0 0 50px rgba(0,0,0,0.9);
+            z-index: 20; min-width: 360px;
+        }
+        .lang-switch { position: absolute; top: 15px; right: 15px; cursor: pointer; font-size: 13px; background: #2f3542; padding: 4px 10px; border-radius: 8px; }
+        h1 { font-size: 48px; margin: 0 0 20px 0; color: #ff4757; text-shadow: 0 0 20px rgba(255,71,87,0.6); }
+        .btn {
+            width: 100%; padding: 12px; margin: 8px 0; font-size: 16px; font-weight: bold;
+            border: none; border-radius: 10px; cursor: pointer; transition: 0.2s;
+        }
+        .btn-play { background: #2ed573; color: #fff; font-size: 18px; }
+        .btn-play:hover { background: #26af5f; transform: scale(1.02); }
+        .btn-sec { background: #57606f; color: #fff; }
+        .btn-sec:hover { background: #747d8c; }
+        input, select {
+            width: 100%; padding: 10px; margin: 6px 0; background: #2f3542;
+            border: 1px solid #47535e; color: #fff; border-radius: 8px; font-size: 14px; text-align: center;
+        }
+        #lobbyStatus { font-size: 14px; color: #ffa502; margin-top: 10px; display: none; }
+
+        canvas { border: 4px solid #1e2230; box-shadow: 0 0 50px #000; background: #000; display: none; }
+    </style>
+</head>
+<body>
+
+    <!-- SADE VE BASİT SAYAÇ -->
+    <div id="hud">
+        <div id="timerBox">00:15</div>
+        <div id="roleIndicator"></div>
+    </div>
+
+    <!-- GİRİŞ MENÜSÜ -->
+    <div id="menu">
+        <div class="lang-switch" onclick="toggleLang()">🌐 <span id="langBtn">EN</span></div>
+        <h1>ahmo.io</h1>
+        
+        <button class="btn btn-play" id="btnQuick" onclick="quickPlay()">HIZLI OYNA</button>
+
+        <div style="width: 100%; height: 1px; background: #2f3542; margin: 15px 0;"></div>
+
+        <label id="lblCapacity" style="font-size: 12px; color: #a4b0be;">Lobi Boyutu (2-10 Kişi):</label>
+        <select id="roomCapacity">
+            <option value="2">2 Kişi (1 Arayan)</option>
+            <option value="5" selected>5 Kişi (1 Arayan)</option>
+            <option value="8">8 Kişi (2 Arayan 🔥)</option>
+            <option value="10">10 Kişi (2 Arayan 🔥)</option>
+        </select>
+        <button class="btn btn-sec" id="btnCreate" onclick="createLobby()">Lobi Oluştur</button>
+
+        <input type="text" id="joinCode" placeholder="Oda Kodu (örn: AB12)" maxlength="4">
+        <button class="btn btn-sec" id="btnJoin" onclick="joinLobby()">Lobiye Katıl</button>
+
+        <div id="lobbyStatus">Lobi bekleniyor... (1/5)</div>
+    </div>
+
+    <canvas id="gameCanvas" width="800" height="600"></canvas>
+
+<script src="/socket.io/socket.io.js"></script>
+<script>
+const socket = io();
+const canvas = document.getElementById("gameCanvas");
+const ctx = canvas.getContext("2d");
+
+// DİL ÇEVİRİLERİ
+let currentLang = "TR";
+const dict = {
+    TR: { quick: "HIZLI OYNA", create: "Lobi Oluştur", join: "Lobiye Katıl", cap: "Lobi Boyutu (2-10 Kişi):", seeker: "ARAYAN (Görüş Sınırlı)", hider: "SAKLANAN (Tam Görüş)", wait: "Oyuncular bekleniyor..." },
+    EN: { quick: "QUICK PLAY", create: "Create Lobby", join: "Join Lobby", cap: "Lobby Size (2-10 Players):", seeker: "SEEKER (Limited Vision)", hider: "HIDER (Full Vision)", wait: "Waiting for players..." }
+};
+
+function toggleLang() {
+    currentLang = currentLang === "TR" ? "EN" : "TR";
+    document.getElementById("langBtn").innerText = currentLang === "TR" ? "EN" : "TR";
+    document.getElementById("btnQuick").innerText = dict[currentLang].quick;
+    document.getElementById("btnCreate").innerText = dict[currentLang].create;
+    document.getElementById("btnJoin").innerText = dict[currentLang].join;
+    document.getElementById("lblCapacity").innerText = dict[currentLang].cap;
+}
+
+let myId = null;
+let players = {};
+let isSeeker = false;
+let gameState = "WAITING";
+
+const myPlayer = {
+    x: 730, y: 530, radius: 12,
+    speed: 3.3,
+    viewDistance: 125
+};
+
+const keys = {};
+window.addEventListener("keydown", e => keys[e.key.toLowerCase()] = true);
+window.addEventListener("keyup", e => keys[e.key.toLowerCase()] = false);
+
+// Harita Engelleri
+const obstacles = [
+    { x: 0, y: 0, w: 800, h: 10 }, { x: 0, y: 590, w: 800, h: 10 },
+    { x: 0, y: 0, w: 10, h: 600 }, { x: 790, y: 0, w: 10, h: 600 },
+    { x: 90, y: 60, w: 45, h: 260 }, { x: 250, y: 0, w: 45, h: 110 },
+    { x: 250, y: 170, w: 260, h: 45 }, { x: 465, y: 70, w: 45, h: 145 },
+    { x: 630, y: 170, w: 170, h: 45 }, { x: 360, y: 330, w: 280, h: 45 },
+    { x: 595, y: 330, w: 45, h: 270 }, { x: 120, y: 460, w: 290, h: 45 }
+];
+
+let segments = [];
+obstacles.forEach(o => {
+    segments.push({ a: {x: o.x, y: o.y}, b: {x: o.x + o.w, y: o.y} });
+    segments.push({ a: {x: o.x + o.w, y: o.y}, b: {x: o.x + o.w, y: o.y + o.h} });
+    segments.push({ a: {x: o.x + o.w, y: o.y + o.h}, b: {x: o.x, y: o.y + o.h} });
+    segments.push({ a: {x: o.x, y: o.y + o.h}, b: {x: o.x, y: o.y} });
+});
+
+// Raycasting (Sadece Arayan İçin)
+function getRayIntersection(ray, seg) {
+    const dx = ray.b.x - ray.a.x, dy = ray.b.y - ray.a.y;
+    const sx = seg.b.x - seg.a.x, sy = seg.b.y - seg.a.y;
+    const denom = dx * sy - dy * sx;
+    if (denom === 0) return null;
+    const t = ((seg.a.x - ray.a.x) * sy - (seg.a.y - ray.a.y) * sx) / denom;
+    const u = ((seg.a.x - ray.a.x) * dy - (seg.a.y - ray.a.y) * dx) / denom;
+    if (t >= 0 && t <= 1 && u >= 0 && u <= 1) return { x: ray.a.x + t * dx, y: ray.a.y + t * dy, dist: t };
+    return null;
+}
+
+function calculateVisibility(px, py, radius) {
+    const rays = 180; const points = [];
+    for (let i = 0; i < rays; i++) {
+        const angle = (i / rays) * Math.PI * 2;
+        const ray = { a: { x: px, y: py }, b: { x: px + Math.cos(angle) * radius, y: py + Math.sin(angle) * radius } };
+        let closest = { x: ray.b.x, y: ray.b.y, dist: 1 };
+        for (let seg of segments) {
+            const hit = getRayIntersection(ray, seg);
+            if (hit && hit.dist < closest.dist) closest = hit;
+        }
+        points.push(closest);
+    }
+    return points;
+}
+
+function hasLineOfSight(x1, y1, x2, y2) {
+    const ray = { a: { x: x1, y: y1 }, b: { x: x2, y: y2 } };
+    return !segments.some(seg => getRayIntersection(ray, seg));
+}
+
+// Menü Buton İşlevleri
+function quickPlay() { socket.emit("joinGame", { type: "quick" }); }
+function createLobby() { socket.emit("joinGame", { type: "create", maxPlayers: document.getElementById("roomCapacity").value }); }
+function joinLobby() { socket.emit("joinGame", { type: "join", roomCode: document.getElementById("joinCode").value }); }
+
+// Socket Olayları
+socket.on("joinedSuccess", data => {
+    myId = data.myId; players = data.players;
+    document.getElementById("menu").style.display = "none";
+    document.getElementById("hud").style.display = "flex";
+    canvas.style.display = "block";
+});
+
+socket.on("playerListUpdate", data => {
+    const count = Object.keys(data.players).length;
+    document.getElementById("roleIndicator").innerText = `${dict[currentLang].wait} (${count}/${data.maxPlayers})`;
+});
+
+socket.on("playerMoved", p => { if(players[p.id]) { players[p.id].x = p.x; players[p.id].y = p.y; } });
+socket.on("playerCaught", d => { if(players[d.targetId]) players[d.targetId].isAlive = false; });
+socket.on("playerLeft", id => delete players[id]);
+
+socket.on("timerUpdate", d => {
+    gameState = d.state;
+    let m = Math.floor(d.timer / 60).toString().padStart(2, '0');
+    let s = (d.timer % 60).toString().padStart(2, '0');
+    document.getElementById("timerBox").innerText = `${m}:${s}`;
+});
+
+socket.on("gameStarted", d => {
+    gameState = d.state; players = d.players;
+    isSeeker = players[myId].isSeeker;
+    myPlayer.x = 730; myPlayer.y = 530;
+
+    const roleEl = document.getElementById("roleIndicator");
+    if (isSeeker) {
+        roleEl.innerText = dict[currentLang].seeker;
+        roleEl.style.color = "#ff4757";
+    } else {
+        roleEl.innerText = dict[currentLang].hider;
+        roleEl.style.color = "#2ed573";
+    }
+});
+
+socket.on("gameOver", d => {
+    alert(d.winner === "SEEKERS" ? "Arayanlar Kazandı! 😈" : "Saklananlar Kazandı! 🏆");
+});
+
+socket.on("roomReset", d => {
+    gameState = d.state; players = d.players;
+    document.getElementById("timerBox").innerText = "00:15";
+});
+
+socket.on("joinError", msg => alert(msg));
+
+// Hareket & Hızlanma Döngüsü
+function update() {
+    if (isSeeker && gameState === "HIDING") return; // 15sn kilit
+
+    let mx = 0, my = 0;
+    if (keys['w'] || keys['arrowup']) my -= 1;
+    if (keys['s'] || keys['arrowdown']) my += 1;
+    if (keys['a'] || keys['arrowleft']) mx -= 1;
+    if (keys['d'] || keys['arrowright']) mx += 1;
+
+    // Hız boostu kontrolü
+    let boost = false;
+    for (let id in players) {
+        if (id === myId || !players[id].isAlive) continue;
+        let p = players[id];
+        let d = Math.hypot(p.x - myPlayer.x, p.y - myPlayer.y);
+        
+        // Arayan saklananı görürse veya saklanan arayanı görürse hızlanır
+        if (d < myPlayer.viewDistance && hasLineOfSight(myPlayer.x, myPlayer.y, p.x, p.y)) {
+            boost = true;
+            if (isSeeker && d < 24) socket.emit("catchPlayer", id);
+        }
+    }
+
+    let spd = boost ? 4.9 : 3.3;
+    if (mx !== 0 && my !== 0) { mx *= 0.7071; my *= 0.7071; }
+
+    let nx = myPlayer.x + mx * spd;
+    let ny = myPlayer.y + my * spd;
+
+    let hitX = obstacles.some(o => nx + 12 > o.x && nx - 12 < o.x + o.w && myPlayer.y + 12 > o.y && myPlayer.y - 12 < o.y + o.h);
+    let hitY = obstacles.some(o => myPlayer.x + 12 > o.x && myPlayer.x - 12 < o.x + o.w && ny + 12 > o.y && ny - 12 < o.y + o.h);
+
+    if (!hitX) myPlayer.x = nx;
+    if (!hitY) myPlayer.y = ny;
+
+    if (mx !== 0 || my !== 0) socket.emit("playerMove", { x: myPlayer.x, y: myPlayer.y });
+}
+
+function draw() {
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+    if (isSeeker) {
+        // --- ARAYAN: KARANLIK VE GÖLGE SİSTEMİ ---
+        ctx.fillStyle = "#000000";
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+        const poly = calculateVisibility(myPlayer.x, myPlayer.y, myPlayer.viewDistance);
+        ctx.save();
+        ctx.beginPath();
+        ctx.moveTo(poly[0].x, poly[0].y);
+        for (let p of poly) ctx.lineTo(p.x, p.y);
+        ctx.closePath();
+        ctx.clip(); // Maskele
+    }
+
+    // --- DÜNYA ÇİZİMİ (Hider burayı engelsiz ful görür) ---
+    ctx.fillStyle = "#595959";
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+    // Kırmızı Spawn
+    ctx.fillStyle = "#ff4757";
+    ctx.fillRect(680, 480, 120, 120);
+
+    // Duvarlar
+    ctx.fillStyle = "#2d3436";
+    obstacles.forEach(o => {
+        ctx.fillRect(o.x, o.y, o.w, o.h);
+        ctx.strokeStyle = "#1e272e";
+        ctx.strokeRect(o.x, o.y, o.w, o.h);
+    });
+
+    // Diğer Oyuncular
+    for (let id in players) {
+        if (id === myId || !players[id].isAlive) continue;
+        let p = players[id];
+
+        // Hider herkesi görür; Seeker ise sadece ışığında olanları görür
+        if (!isSeeker || (Math.hypot(p.x - myPlayer.x, p.y - myPlayer.y) < myPlayer.viewDistance && hasLineOfSight(myPlayer.x, myPlayer.y, p.x, p.y))) {
+            ctx.beginPath();
+            ctx.arc(p.x, p.y, 12, 0, Math.PI * 2);
+            ctx.fillStyle = p.isSeeker ? "#ff4757" : "#2ed573";
+            ctx.fill();
+            ctx.strokeStyle = "#fff";
+            ctx.stroke();
+        }
+    }
+
+    if (isSeeker) ctx.restore(); // Arayan maskesini kapat
+
+    // Kendini Çiz
+    ctx.beginPath();
+    ctx.arc(myPlayer.x, myPlayer.y, myPlayer.radius, 0, Math.PI * 2);
+    ctx.fillStyle = isSeeker ? "#ff4757" : "#1e90ff";
+    ctx.fill();
+    ctx.lineWidth = 3;
+    ctx.strokeStyle = "#fff";
+    ctx.stroke();
+}
+
+function loop() {
+    update();
+    draw();
+    requestAnimationFrame(loop);
+}
+loop();
+</script>
+</body>
+</html>
