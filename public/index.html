@@ -2,84 +2,158 @@
 <html lang="tr">
 <head>
     <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>ahmo.io</title>
     <style>
-        * { box-sizing: border-box; }
+        * { box-sizing: border-box; margin: 0; padding: 0; }
         body {
-            margin: 0; padding: 0; background-color: #0d0e15;
+            background-color: #1e272e; color: #f5f6fa;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
             display: flex; flex-direction: column; align-items: center; justify-content: center;
-            height: 100vh; color: #fff; font-family: 'Segoe UI', Tahoma, sans-serif;
-            overflow: hidden; user-select: none;
+            height: 100vh; overflow: hidden; user-select: none;
         }
 
-        /* ÜST BASİT SAYAÇ */
+        /* SADE KLASİK MENÜ VE PANELLER */
+        .panel {
+            background: #2f3640; border: 2px solid #718093;
+            border-radius: 8px; padding: 25px; width: 360px;
+            display: flex; flex-direction: column; gap: 12px;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.5); z-index: 20;
+        }
+        h1 { text-align: center; font-size: 36px; color: #e84118; margin-bottom: 5px; }
+        h2 { text-align: center; font-size: 20px; color: #dcdde1; margin-bottom: 10px; }
+        
+        .btn {
+            background: #353b48; border: 1px solid #718093; color: #fff;
+            padding: 10px; font-size: 15px; font-weight: bold; border-radius: 6px;
+            cursor: pointer; transition: 0.1s; text-align: center;
+        }
+        .btn:hover { background: #4b6584; }
+        .btn-primary { background: #44bd32; border-color: #4cd137; }
+        .btn-primary:hover { background: #4cd137; }
+        .btn-danger { background: #c23616; border-color: #e84118; }
+        
+        input, select {
+            background: #1e272e; border: 1px solid #718093; color: #fff;
+            padding: 9px; border-radius: 6px; font-size: 14px; outline: none;
+        }
+        .row { display: flex; gap: 8px; justify-content: space-between; align-items: center; }
+        .coin-badge { background: #e1b12c; color: #000; padding: 4px 10px; border-radius: 12px; font-weight: bold; font-size: 14px; }
+
+        /* OYUN İÇİ SADE HUD */
         #hud {
-            position: absolute; top: 15px; display: none; flex-direction: column;
-            align-items: center; z-index: 10;
+            position: absolute; top: 12px; display: none;
+            flex-direction: column; align-items: center; z-index: 10; gap: 5px;
         }
         #timerBox {
-            background: rgba(0, 0, 0, 0.85); border: 2px solid #ff4757;
-            padding: 6px 24px; border-radius: 20px; font-size: 26px;
-            font-weight: 900; letter-spacing: 2px; color: #fff; box-shadow: 0 0 15px rgba(255,71,87,0.4);
+            background: #2f3640; border: 2px solid #718093;
+            padding: 4px 20px; border-radius: 6px; font-size: 24px; font-weight: bold;
         }
-        #roleIndicator { font-size: 14px; margin-top: 5px; font-weight: bold; }
+        #hudInfo { font-size: 14px; font-weight: bold; }
 
-        /* MENÜ ARAYÜZÜ */
-        #menu {
-            position: absolute; display: flex; flex-direction: column;
-            align-items: center; background: #161824; padding: 35px 45px;
-            border-radius: 20px; border: 3px solid #2f3542; box-shadow: 0 0 50px rgba(0,0,0,0.9);
-            z-index: 20; min-width: 360px;
+        /* MOBİL DOKUNMATİK KONTROLLER */
+        #mobileControls {
+            position: absolute; bottom: 20px; width: 100%; max-width: 800px;
+            display: none; justify-content: space-between; padding: 0 25px; z-index: 15;
+            pointer-events: none;
         }
-        .lang-switch { position: absolute; top: 15px; right: 15px; cursor: pointer; font-size: 13px; background: #2f3542; padding: 4px 10px; border-radius: 8px; }
-        h1 { font-size: 48px; margin: 0 0 20px 0; color: #ff4757; text-shadow: 0 0 20px rgba(255,71,87,0.6); }
-        .btn {
-            width: 100%; padding: 12px; margin: 8px 0; font-size: 16px; font-weight: bold;
-            border: none; border-radius: 10px; cursor: pointer; transition: 0.2s;
+        .dpad {
+            display: grid; grid-template-columns: repeat(3, 50px); grid-template-rows: repeat(3, 50px);
+            gap: 5px; pointer-events: auto;
         }
-        .btn-play { background: #2ed573; color: #fff; font-size: 18px; }
-        .btn-play:hover { background: #26af5f; transform: scale(1.02); }
-        .btn-sec { background: #57606f; color: #fff; }
-        .btn-sec:hover { background: #747d8c; }
-        input, select {
-            width: 100%; padding: 10px; margin: 6px 0; background: #2f3542;
-            border: 1px solid #47535e; color: #fff; border-radius: 8px; font-size: 14px; text-align: center;
+        .dpad-btn {
+            background: rgba(47, 54, 64, 0.7); border: 2px solid #718093;
+            color: #fff; font-size: 20px; font-weight: bold; border-radius: 8px;
+            display: flex; align-items: center; justify-content: center;
         }
-        #lobbyStatus { font-size: 14px; color: #ffa502; margin-top: 10px; display: none; }
+        .action-btn {
+            width: 75px; height: 75px; background: #e84118; border: 2px solid #fff;
+            border-radius: 50%; color: #fff; font-weight: bold; font-size: 13px;
+            pointer-events: auto; display: flex; align-items: center; justify-content: center;
+            align-self: flex-end;
+        }
 
-        canvas { border: 4px solid #1e2230; box-shadow: 0 0 50px #000; background: #000; display: none; }
+        canvas { border: 2px solid #718093; background: #000; display: none; }
     </style>
 </head>
 <body>
 
-    <!-- SADE VE BASİT SAYAÇ -->
+    <!-- SADE SAYAÇ VE BİLGİ -->
     <div id="hud">
         <div id="timerBox">00:15</div>
-        <div id="roleIndicator"></div>
+        <div id="hudInfo">Rol: Bekleniyor... | Coin: <span id="gameCoin">0</span></div>
     </div>
 
-    <!-- GİRİŞ MENÜSÜ -->
-    <div id="menu">
-        <div class="lang-switch" onclick="toggleLang()">🌐 <span id="langBtn">EN</span></div>
+    <!-- 1. ANA MENÜ -->
+    <div class="panel" id="mainMenu">
         <h1>ahmo.io</h1>
-        
-        <button class="btn btn-play" id="btnQuick" onclick="quickPlay()">HIZLI OYNA</button>
+        <div class="row">
+            <span>Bakiye:</span>
+            <span class="coin-badge">💰 <span id="coinCount">0</span> Coin</span>
+        </div>
+        <div class="row">
+            <label>Cihaz:</label>
+            <select id="deviceSelect">
+                <option value="pc">Bilgisayar (Klavye)</option>
+                <option value="mobile">Mobil (Dokunmatik)</option>
+            </select>
+        </div>
+        <button class="btn btn-primary" onclick="showLobbyList()">OYNA</button>
+        <button class="btn" onclick="showCreateScreen()">Lobi Oluştur</button>
+    </div>
 
-        <div style="width: 100%; height: 1px; background: #2f3542; margin: 15px 0;"></div>
+    <!-- 2. LOBİ LİSTESİ / KATILMA EKRANI -->
+    <div class="panel" id="lobbyListMenu" style="display: none;">
+        <h2>Lobiler</h2>
+        <div id="lobbiesContainer" style="max-height: 140px; overflow-y: auto; display: flex; flex-direction: column; gap: 5px;"></div>
+        <div class="row">
+            <input type="text" id="customJoinCode" placeholder="Oda Kodu (örn: AB12)" maxlength="6">
+            <button class="btn btn-primary" onclick="joinByCode()">Katıl</button>
+        </div>
+        <button class="btn btn-danger" onclick="backToMain()">Geri</button>
+    </div>
 
-        <label id="lblCapacity" style="font-size: 12px; color: #a4b0be;">Lobi Boyutu (2-10 Kişi):</label>
-        <select id="roomCapacity">
-            <option value="2">2 Kişi (1 Arayan)</option>
-            <option value="5" selected>5 Kişi (1 Arayan)</option>
-            <option value="8">8 Kişi (2 Arayan 🔥)</option>
-            <option value="10">10 Kişi (2 Arayan 🔥)</option>
+    <!-- 3. LOBİ OLUŞTURMA SAYFASI -->
+    <div class="panel" id="createMenu" style="display: none;">
+        <h2>Lobi Oluştur</h2>
+        <label>Harita Seç:</label>
+        <select id="createMap">
+            <option value="labirent">Labirent (Klasik)</option>
+            <option value="bahce">Bahçe</option>
+            <option value="laboratuvar">Laboratuvar</option>
         </select>
-        <button class="btn btn-sec" id="btnCreate" onclick="createLobby()">Lobi Oluştur</button>
+        <label>Kişi Sayısı (2-10):</label>
+        <select id="createMaxPlayers">
+            <option value="2">2 Kişi (1 Arayan)</option>
+            <option value="4">4 Kişi (1 Arayan)</option>
+            <option value="5" selected>5 Kişi (1 Arayan)</option>
+            <option value="8">8 Kişi (2 Arayan)</option>
+            <option value="10">10 Kişi (2 Arayan)</option>
+        </select>
+        <label>Gizlilik:</label>
+        <select id="createPrivacy" onchange="toggleCodeInput()">
+            <option value="public">Herkese Açık</option>
+            <option value="private">Özel (Kod ile)</option>
+        </select>
+        <input type="text" id="createCustomCode" placeholder="Özel Oda Kodu Yaz" maxlength="6" style="display: none;">
+        <button class="btn btn-primary" onclick="submitCreateLobby()">Oluştur ve Başla</button>
+        <button class="btn btn-danger" onclick="backToMain()">Geri</button>
+    </div>
 
-        <input type="text" id="joinCode" placeholder="Oda Kodu (örn: AB12)" maxlength="4">
-        <button class="btn btn-sec" id="btnJoin" onclick="joinLobby()">Lobiye Katıl</button>
-
-        <div id="lobbyStatus">Lobi bekleniyor... (1/5)</div>
+    <!-- MOBİL KONTROLLER -->
+    <div id="mobileControls">
+        <div class="dpad">
+            <div></div>
+            <button class="dpad-btn" id="mUp">▲</button>
+            <div></div>
+            <button class="dpad-btn" id="mLeft">◀</button>
+            <div></div>
+            <button class="dpad-btn" id="mRight">▶</button>
+            <div></div>
+            <button class="dpad-btn" id="mDown">▼</button>
+            <div></div>
+        </div>
+        <button class="action-btn" id="mAction">TUZAK<br>(E)</button>
     </div>
 
     <canvas id="gameCanvas" width="800" height="600"></canvas>
@@ -90,56 +164,92 @@ const socket = io();
 const canvas = document.getElementById("gameCanvas");
 const ctx = canvas.getContext("2d");
 
-// DİL ÇEVİRİLERİ
-let currentLang = "TR";
-const dict = {
-    TR: { quick: "HIZLI OYNA", create: "Lobi Oluştur", join: "Lobiye Katıl", cap: "Lobi Boyutu (2-10 Kişi):", seeker: "ARAYAN (Görüş Sınırlı)", hider: "SAKLANAN (Tam Görüş)", wait: "Oyuncular bekleniyor..." },
-    EN: { quick: "QUICK PLAY", create: "Create Lobby", join: "Join Lobby", cap: "Lobby Size (2-10 Players):", seeker: "SEEKER (Limited Vision)", hider: "HIDER (Full Vision)", wait: "Waiting for players..." }
-};
-
-function toggleLang() {
-    currentLang = currentLang === "TR" ? "EN" : "TR";
-    document.getElementById("langBtn").innerText = currentLang === "TR" ? "EN" : "TR";
-    document.getElementById("btnQuick").innerText = dict[currentLang].quick;
-    document.getElementById("btnCreate").innerText = dict[currentLang].create;
-    document.getElementById("btnJoin").innerText = dict[currentLang].join;
-    document.getElementById("lblCapacity").innerText = dict[currentLang].cap;
+// Coin Kaydı
+let myCoins = parseInt(localStorage.getItem("ahmo_coins") || "0");
+function updateCoinUI() {
+    document.getElementById("coinCount").innerText = myCoins;
+    document.getElementById("gameCoin").innerText = myCoins;
+    localStorage.setItem("ahmo_coins", myCoins);
 }
+updateCoinUI();
 
+let isMobile = false;
 let myId = null;
+let currentMap = "labirent";
 let players = {};
+let coins = [];
+let traps = [];
 let isSeeker = false;
 let gameState = "WAITING";
+let jailAlertPos = null;
 
 const myPlayer = {
     x: 730, y: 530, radius: 12,
-    speed: 3.3,
-    viewDistance: 125
+    hiderSpeed: 3.2,
+    seekerSpeed: 3.52, // Arayanlar %10 daha hızlı
+    viewDistance: 130,
+    isFrozen: false
 };
 
-const keys = {};
-window.addEventListener("keydown", e => keys[e.key.toLowerCase()] = true);
-window.addEventListener("keyup", e => keys[e.key.toLowerCase()] = false);
+// ==========================================
+// HARİTA VERİLERİ (3 HARİTA)
+// ==========================================
+const MAPS = {
+    labirent: {
+        bg: "#595959",
+        spawn: { x: 680, y: 480, w: 120, h: 120 },
+        walls: [
+            { x: 0, y: 0, w: 800, h: 10 }, { x: 0, y: 590, w: 800, h: 10 }, { x: 0, y: 0, w: 10, h: 600 }, { x: 790, y: 0, w: 10, h: 600 },
+            { x: 90, y: 60, w: 45, h: 260 }, { x: 250, y: 0, w: 45, h: 110 }, { x: 250, y: 170, w: 260, h: 45 },
+            { x: 465, y: 70, w: 45, h: 145 }, { x: 630, y: 170, w: 170, h: 45 }, { x: 360, y: 330, w: 280, h: 45 },
+            { x: 595, y: 330, w: 45, h: 270 }, { x: 120, y: 460, w: 290, h: 45 }
+        ]
+    },
+    bahce: {
+        bg: "#6ab04c",
+        spawn: { x: 680, y: 480, w: 120, h: 120 },
+        walls: [
+            { x: 0, y: 0, w: 800, h: 10 }, { x: 0, y: 590, w: 800, h: 10 }, { x: 0, y: 0, w: 10, h: 600 }, { x: 790, y: 0, w: 10, h: 600 },
+            { x: 90, y: 200, w: 60, h: 250 }, { x: 90, y: 390, w: 250, h: 60 }, // L çim engel
+            { x: 300, y: 80, w: 240, h: 60 },                                   // Üst yeşil bar
+            { x: 500, y: 240, w: 200, h: 200 }                                  // Sağ büyük yeşil kare
+        ],
+        decorations: [
+            { type: 'path', x: 20, y: 100, w: 740, h: 500 },
+            { type: 'circle', x: 100, y: 60, r: 25, color: '#f0932b' },
+            { type: 'circle', x: 680, y: 70, r: 25, color: '#f0932b' },
+            { type: 'circle', x: 320, y: 300, r: 25, color: '#f0932b' },
+            { type: 'circle', x: 540, y: 500, r: 25, color: '#f0932b' }
+        ]
+    },
+    laboratuvar: {
+        bg: "#7f8c8d",
+        spawn: { x: 340, y: 510, w: 120, h: 90 },
+        walls: [
+            { x: 0, y: 0, w: 800, h: 10 }, { x: 0, y: 590, w: 800, h: 10 }, { x: 0, y: 0, w: 10, h: 600 }, { x: 790, y: 0, w: 10, h: 600 },
+            { x: 100, y: 0, w: 90, h: 180 }, { x: 610, y: 0, w: 90, h: 180 },
+            { x: 100, y: 420, w: 90, h: 180 }, { x: 610, y: 420, w: 90, h: 180 },
+            { x: 60, y: 250, w: 180, h: 90 }, { x: 560, y: 250, w: 180, h: 90 },
+            { x: 310, y: 210, w: 180, h: 180 } // Merkez sütun
+        ]
+    }
+};
 
-// Harita Engelleri
-const obstacles = [
-    { x: 0, y: 0, w: 800, h: 10 }, { x: 0, y: 590, w: 800, h: 10 },
-    { x: 0, y: 0, w: 10, h: 600 }, { x: 790, y: 0, w: 10, h: 600 },
-    { x: 90, y: 60, w: 45, h: 260 }, { x: 250, y: 0, w: 45, h: 110 },
-    { x: 250, y: 170, w: 260, h: 45 }, { x: 465, y: 70, w: 45, h: 145 },
-    { x: 630, y: 170, w: 170, h: 45 }, { x: 360, y: 330, w: 280, h: 45 },
-    { x: 595, y: 330, w: 45, h: 270 }, { x: 120, y: 460, w: 290, h: 45 }
-];
-
+let currentWalls = [];
 let segments = [];
-obstacles.forEach(o => {
-    segments.push({ a: {x: o.x, y: o.y}, b: {x: o.x + o.w, y: o.y} });
-    segments.push({ a: {x: o.x + o.w, y: o.y}, b: {x: o.x + o.w, y: o.y + o.h} });
-    segments.push({ a: {x: o.x + o.w, y: o.y + o.h}, b: {x: o.x, y: o.y + o.h} });
-    segments.push({ a: {x: o.x, y: o.y + o.h}, b: {x: o.x, y: o.y} });
-});
+function setMap(mapName) {
+    currentMap = mapName;
+    currentWalls = MAPS[mapName].walls;
+    segments = [];
+    currentWalls.forEach(o => {
+        segments.push({ a: {x: o.x, y: o.y}, b: {x: o.x + o.w, y: o.y} });
+        segments.push({ a: {x: o.x + o.w, y: o.y}, b: {x: o.x + o.w, y: o.y + o.h} });
+        segments.push({ a: {x: o.x + o.w, y: o.y + o.h}, b: {x: o.x, y: o.y + o.h} });
+        segments.push({ a: {x: o.x, y: o.y + o.h}, b: {x: o.x, y: o.y} });
+    });
+}
 
-// Raycasting (Sadece Arayan İçin)
+// Raycasting Fonksiyonları
 function getRayIntersection(ray, seg) {
     const dx = ray.b.x - ray.a.x, dy = ray.b.y - ray.a.y;
     const sx = seg.b.x - seg.a.x, sy = seg.b.y - seg.a.y;
@@ -166,69 +276,164 @@ function calculateVisibility(px, py, radius) {
     return points;
 }
 
-function hasLineOfSight(x1, y1, x2, y2) {
-    const ray = { a: { x: x1, y: y1 }, b: { x: x2, y: y2 } };
-    return !segments.some(seg => getRayIntersection(ray, seg));
+// Kontroller
+const keys = {};
+window.addEventListener("keydown", e => {
+    keys[e.key.toLowerCase()] = true;
+    if (e.key.toLowerCase() === 'e' || e.key === ' ') useTrap();
+});
+window.addEventListener("keyup", e => keys[e.key.toLowerCase()] = false);
+
+// Menü Geçişleri
+function backToMain() {
+    document.getElementById("mainMenu").style.display = "flex";
+    document.getElementById("lobbyListMenu").style.display = "none";
+    document.getElementById("createMenu").style.display = "none";
+}
+function showCreateScreen() {
+    document.getElementById("mainMenu").style.display = "none";
+    document.getElementById("createMenu").style.display = "flex";
+}
+function toggleCodeInput() {
+    const p = document.getElementById("createPrivacy").value;
+    document.getElementById("createCustomCode").style.display = (p === "private") ? "block" : "none";
+}
+function showLobbyList() {
+    document.getElementById("mainMenu").style.display = "none";
+    document.getElementById("lobbyListMenu").style.display = "flex";
+    socket.emit("getPublicLobbies");
 }
 
-// Menü Buton İşlevleri
-function quickPlay() { socket.emit("joinGame", { type: "quick" }); }
-function createLobby() { socket.emit("joinGame", { type: "create", maxPlayers: document.getElementById("roomCapacity").value }); }
-function joinLobby() { socket.emit("joinGame", { type: "join", roomCode: document.getElementById("joinCode").value }); }
+function submitCreateLobby() {
+    isMobile = document.getElementById("deviceSelect").value === "mobile";
+    socket.emit("joinOrCreate", {
+        action: "create",
+        map: document.getElementById("createMap").value,
+        maxPlayers: document.getElementById("createMaxPlayers").value,
+        isPrivate: document.getElementById("createPrivacy").value === "private",
+        customCode: document.getElementById("createCustomCode").value
+    });
+}
 
-// Socket Olayları
+function joinByCode() {
+    isMobile = document.getElementById("deviceSelect").value === "mobile";
+    socket.emit("joinOrCreate", { action: "join", roomId: document.getElementById("customJoinCode").value });
+}
+
+// Socket Yanıtları
+socket.on("publicLobbiesList", list => {
+    const box = document.getElementById("lobbiesContainer");
+    box.innerHTML = "";
+    if (list.length === 0) {
+        box.innerHTML = "<p style='color:#aaa; font-size:13px; text-align:center;'>Açık lobi yok.</p>";
+        return;
+    }
+    list.forEach(l => {
+        const d = document.createElement("div");
+        d.className = "row";
+        d.style.background = "#353b48"; d.style.padding = "6px"; d.style.borderRadius = "4px";
+        d.innerHTML = `<span>[${l.map.toUpperCase()}] ${l.playersCount}/${l.maxPlayers}</span>
+                       <button class="btn btn-primary" style="padding:4px 10px;" onclick="joinSpecific('${l.id}')">Gir</button>`;
+        box.appendChild(d);
+    });
+});
+
+function joinSpecific(id) {
+    isMobile = document.getElementById("deviceSelect").value === "mobile";
+    socket.emit("joinOrCreate", { action: "join", roomId: id });
+}
+
 socket.on("joinedSuccess", data => {
     myId = data.myId; players = data.players;
-    document.getElementById("menu").style.display = "none";
+    setMap(data.map);
+    document.getElementById("mainMenu").style.display = "none";
+    document.getElementById("lobbyListMenu").style.display = "none";
+    document.getElementById("createMenu").style.display = "none";
     document.getElementById("hud").style.display = "flex";
     canvas.style.display = "block";
+    if (isMobile) document.getElementById("mobileControls").style.display = "flex";
 });
 
 socket.on("playerListUpdate", data => {
     const count = Object.keys(data.players).length;
-    document.getElementById("roleIndicator").innerText = `${dict[currentLang].wait} (${count}/${data.maxPlayers})`;
+    document.getElementById("hudInfo").innerText = `Lobi Bekleniyor (${count}/${data.maxPlayers})`;
 });
 
-socket.on("playerMoved", p => { if(players[p.id]) { players[p.id].x = p.x; players[p.id].y = p.y; } });
-socket.on("playerCaught", d => { if(players[d.targetId]) players[d.targetId].isAlive = false; });
-socket.on("playerLeft", id => delete players[id]);
-
 socket.on("timerUpdate", d => {
-    gameState = d.state;
+    gameState = d.state; coins = d.coins || [];
     let m = Math.floor(d.timer / 60).toString().padStart(2, '0');
     let s = (d.timer % 60).toString().padStart(2, '0');
     document.getElementById("timerBox").innerText = `${m}:${s}`;
 });
 
 socket.on("gameStarted", d => {
-    gameState = d.state; players = d.players;
+    gameState = d.state; players = d.players; coins = d.coins;
+    setMap(d.map);
     isSeeker = players[myId].isSeeker;
-    myPlayer.x = 730; myPlayer.y = 530;
+    const sp = MAPS[currentMap].spawn;
+    myPlayer.x = sp.x + sp.w / 2; myPlayer.y = sp.y + sp.h / 2;
+    document.getElementById("hudInfo").innerText = isSeeker ? "Rol: ARAYAN (Hızlı & Görüş Dar)" : "Rol: SAKLANAN (Tam Görüş)";
+    document.getElementById("hudInfo").style.color = isSeeker ? "#e84118" : "#4cd137";
+});
 
-    const roleEl = document.getElementById("roleIndicator");
-    if (isSeeker) {
-        roleEl.innerText = dict[currentLang].seeker;
-        roleEl.style.color = "#ff4757";
-    } else {
-        roleEl.innerText = dict[currentLang].hider;
-        roleEl.style.color = "#2ed573";
+socket.on("playerMoved", p => { if(players[p.id]) { players[p.id].x = p.x; players[p.id].y = p.y; } });
+socket.on("coinCollected", d => {
+    coins = coins.filter(c => c.id !== d.coinId);
+    if (d.collectorId === myId) {
+        myCoins += 1;
+        updateCoinUI();
     }
 });
-
-socket.on("gameOver", d => {
-    alert(d.winner === "SEEKERS" ? "Arayanlar Kazandı! 😈" : "Saklananlar Kazandı! 🏆");
+socket.on("trapPlaced", t => traps.push(t));
+socket.on("trapTriggered", d => {
+    traps = traps.filter(t => t.id !== d.trapId);
+    if (d.victimId === myId) {
+        myPlayer.isFrozen = true;
+        alert(`Tuzağa yakalandın! ${d.duration} saniye dondu.`);
+    }
+    if (isSeeker && d.alertSeeker) {
+        jailAlertPos = { x: d.x, y: d.y };
+        setTimeout(() => jailAlertPos = null, 5000);
+    }
 });
+socket.on("playerUnfrozen", id => { if(id === myId) myPlayer.isFrozen = false; });
+socket.on("playerCaught", d => { if(players[d.targetId]) players[d.targetId].isAlive = false; });
+socket.on("gameOver", d => alert(d.winner === "SEEKERS" ? "Arayanlar Kazandı!" : "Saklananlar Kazandı!"));
+socket.on("roomReset", () => { myPlayer.isFrozen = false; traps = []; jailAlertPos = null; });
+socket.on("errorMsg", m => alert(m));
 
-socket.on("roomReset", d => {
-    gameState = d.state; players = d.players;
-    document.getElementById("timerBox").innerText = "00:15";
-});
+// Tuzak Kullanma Mantığı
+function useTrap() {
+    if (myPlayer.isFrozen || gameState !== "SEEKING") return;
+    if (isSeeker) {
+        // Jail Tuzağı (15 Coin)
+        if (myCoins >= 15) {
+            myCoins -= 15; updateCoinUI();
+            socket.emit("placeTrap", { type: "jail", x: myPlayer.x, y: myPlayer.y });
+        } else alert("Jail Tuzağı için 15 Coin gerekli!");
+    } else {
+        // Yapışkan Tuzak (10 Coin)
+        if (myCoins >= 10) {
+            myCoins -= 10; updateCoinUI();
+            socket.emit("placeTrap", { type: "sticky", x: myPlayer.x, y: myPlayer.y });
+        } else alert("Yapışkan Tuzak için 10 Coin gerekli!");
+    }
+}
 
-socket.on("joinError", msg => alert(msg));
+// Mobil Buton Bağlantıları
+if ('ontouchstart' in window) {
+    const bindBtn = (id, k) => {
+        const el = document.getElementById(id);
+        el.addEventListener("touchstart", (e) => { e.preventDefault(); keys[k] = true; });
+        el.addEventListener("touchend", (e) => { e.preventDefault(); keys[k] = false; });
+    };
+    bindBtn("mUp", "w"); bindBtn("mDown", "s"); bindBtn("mLeft", "a"); bindBtn("mRight", "d");
+    document.getElementById("mAction").addEventListener("touchstart", (e) => { e.preventDefault(); useTrap(); });
+}
 
-// Hareket & Hızlanma Döngüsü
+// Oyun Döngüsü
 function update() {
-    if (isSeeker && gameState === "HIDING") return; // 15sn kilit
+    if (myPlayer.isFrozen || (isSeeker && gameState === "HIDING")) return;
 
     let mx = 0, my = 0;
     if (keys['w'] || keys['arrowup']) my -= 1;
@@ -236,40 +441,52 @@ function update() {
     if (keys['a'] || keys['arrowleft']) mx -= 1;
     if (keys['d'] || keys['arrowright']) mx += 1;
 
-    // Hız boostu kontrolü
-    let boost = false;
-    for (let id in players) {
-        if (id === myId || !players[id].isAlive) continue;
-        let p = players[id];
-        let d = Math.hypot(p.x - myPlayer.x, p.y - myPlayer.y);
-        
-        // Arayan saklananı görürse veya saklanan arayanı görürse hızlanır
-        if (d < myPlayer.viewDistance && hasLineOfSight(myPlayer.x, myPlayer.y, p.x, p.y)) {
-            boost = true;
-            if (isSeeker && d < 24) socket.emit("catchPlayer", id);
-        }
-    }
-
-    let spd = boost ? 4.9 : 3.3;
+    let spd = isSeeker ? myPlayer.seekerSpeed : myPlayer.hiderSpeed;
     if (mx !== 0 && my !== 0) { mx *= 0.7071; my *= 0.7071; }
 
     let nx = myPlayer.x + mx * spd;
     let ny = myPlayer.y + my * spd;
 
-    let hitX = obstacles.some(o => nx + 12 > o.x && nx - 12 < o.x + o.w && myPlayer.y + 12 > o.y && myPlayer.y - 12 < o.y + o.h);
-    let hitY = obstacles.some(o => myPlayer.x + 12 > o.x && myPlayer.x - 12 < o.x + o.w && ny + 12 > o.y && ny - 12 < o.y + o.h);
+    let hitX = currentWalls.some(o => nx + 12 > o.x && nx - 12 < o.x + o.w && myPlayer.y + 12 > o.y && myPlayer.y - 12 < o.y + o.h);
+    let hitY = currentWalls.some(o => myPlayer.x + 12 > o.x && myPlayer.x - 12 < o.x + o.w && ny + 12 > o.y && ny - 12 < o.y + o.h);
 
     if (!hitX) myPlayer.x = nx;
     if (!hitY) myPlayer.y = ny;
 
     if (mx !== 0 || my !== 0) socket.emit("playerMove", { x: myPlayer.x, y: myPlayer.y });
+
+    // Coin Alma Kontrolü
+    coins.forEach(c => {
+        if (Math.hypot(c.x - myPlayer.x, c.y - myPlayer.y) < 18) {
+            socket.emit("collectCoin", c.id);
+        }
+    });
+
+    // Tuzağa Basma Kontrolü
+    traps.forEach(t => {
+        if (Math.hypot(t.x - myPlayer.x, t.y - myPlayer.y) < 18) {
+            socket.emit("triggerTrap", t.id);
+        }
+    });
+
+    // Arayan Saklananı Yakalar
+    if (isSeeker && gameState === "SEEKING") {
+        for (let id in players) {
+            if (id !== myId && players[id].isAlive && !players[id].isSeeker) {
+                if (Math.hypot(players[id].x - myPlayer.x, players[id].y - myPlayer.y) < 24) {
+                    socket.emit("catchPlayer", id);
+                }
+            }
+        }
+    }
 }
 
 function draw() {
     ctx.clearRect(0, 0, canvas.width, canvas.height);
 
+    const mapData = MAPS[currentMap];
+
     if (isSeeker) {
-        // --- ARAYAN: KARANLIK VE GÖLGE SİSTEMİ ---
         ctx.fillStyle = "#000000";
         ctx.fillRect(0, 0, canvas.width, canvas.height);
 
@@ -279,58 +496,82 @@ function draw() {
         ctx.moveTo(poly[0].x, poly[0].y);
         for (let p of poly) ctx.lineTo(p.x, p.y);
         ctx.closePath();
-        ctx.clip(); // Maskele
+        ctx.clip();
     }
 
-    // --- DÜNYA ÇİZİMİ (Hider burayı engelsiz ful görür) ---
-    ctx.fillStyle = "#595959";
+    // Zemin
+    ctx.fillStyle = mapData.bg;
     ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-    // Kırmızı Spawn
-    ctx.fillStyle = "#ff4757";
-    ctx.fillRect(680, 480, 120, 120);
+    // Bahçe Haritası Süsleri
+    if (mapData.decorations) {
+        mapData.decorations.forEach(d => {
+            if (d.type === 'circle') {
+                ctx.beginPath(); ctx.arc(d.x, d.y, d.r, 0, Math.PI*2);
+                ctx.fillStyle = d.color; ctx.fill();
+            }
+        });
+    }
+
+    // Spawn Alanı
+    ctx.fillStyle = "#e84118";
+    ctx.fillRect(mapData.spawn.x, mapData.spawn.y, mapData.spawn.w, mapData.spawn.h);
 
     // Duvarlar
-    ctx.fillStyle = "#2d3436";
-    obstacles.forEach(o => {
+    ctx.fillStyle = "#2f3640";
+    currentWalls.forEach(o => {
         ctx.fillRect(o.x, o.y, o.w, o.h);
         ctx.strokeStyle = "#1e272e";
         ctx.strokeRect(o.x, o.y, o.w, o.h);
+    });
+
+    // Coinler
+    coins.forEach(c => {
+        ctx.beginPath(); ctx.arc(c.x, c.y, 6, 0, Math.PI*2);
+        ctx.fillStyle = "#fbc531"; ctx.fill();
+        ctx.strokeStyle = "#e1b12c"; ctx.stroke();
+    });
+
+    // Tuzaklar
+    traps.forEach(t => {
+        ctx.beginPath(); ctx.arc(t.x, t.y, 10, 0, Math.PI*2);
+        if (t.type === "sticky") {
+            ctx.fillStyle = "#9c88ff"; ctx.fill(); // Yapışkan Mor
+        } else if (t.type === "jail") {
+            ctx.fillStyle = "rgba(47, 54, 64, 0.1)"; // %90 Görünmez Hapis
+            ctx.fill();
+        }
     });
 
     // Diğer Oyuncular
     for (let id in players) {
         if (id === myId || !players[id].isAlive) continue;
         let p = players[id];
-
-        // Hider herkesi görür; Seeker ise sadece ışığında olanları görür
-        if (!isSeeker || (Math.hypot(p.x - myPlayer.x, p.y - myPlayer.y) < myPlayer.viewDistance && hasLineOfSight(myPlayer.x, myPlayer.y, p.x, p.y))) {
-            ctx.beginPath();
-            ctx.arc(p.x, p.y, 12, 0, Math.PI * 2);
-            ctx.fillStyle = p.isSeeker ? "#ff4757" : "#2ed573";
-            ctx.fill();
-            ctx.strokeStyle = "#fff";
-            ctx.stroke();
-        }
+        ctx.beginPath(); ctx.arc(p.x, p.y, 12, 0, Math.PI * 2);
+        ctx.fillStyle = p.isSeeker ? "#e84118" : "#4cd137";
+        ctx.fill();
+        ctx.strokeStyle = "#fff"; ctx.stroke();
     }
 
-    if (isSeeker) ctx.restore(); // Arayan maskesini kapat
+    if (isSeeker) ctx.restore();
 
     // Kendini Çiz
-    ctx.beginPath();
-    ctx.arc(myPlayer.x, myPlayer.y, myPlayer.radius, 0, Math.PI * 2);
-    ctx.fillStyle = isSeeker ? "#ff4757" : "#1e90ff";
+    ctx.beginPath(); ctx.arc(myPlayer.x, myPlayer.y, myPlayer.radius, 0, Math.PI * 2);
+    ctx.fillStyle = isSeeker ? "#e84118" : "#00a8ff";
     ctx.fill();
-    ctx.lineWidth = 3;
-    ctx.strokeStyle = "#fff";
-    ctx.stroke();
+    ctx.lineWidth = 2; ctx.strokeStyle = "#fff"; ctx.stroke();
+
+    // Jail Tuzağına Düşen Biri Varsa Arayana Ok Çiz
+    if (isSeeker && jailAlertPos) {
+        const angle = Math.atan2(jailAlertPos.y - myPlayer.y, jailAlertPos.x - myPlayer.x);
+        const arrowX = myPlayer.x + Math.cos(angle) * 35;
+        const arrowY = myPlayer.y + Math.sin(angle) * 35;
+        ctx.beginPath(); ctx.arc(arrowX, arrowY, 6, 0, Math.PI*2);
+        ctx.fillStyle = "#e84118"; ctx.fill();
+    }
 }
 
-function loop() {
-    update();
-    draw();
-    requestAnimationFrame(loop);
-}
+function loop() { update(); draw(); requestAnimationFrame(loop); }
 loop();
 </script>
 </body>
