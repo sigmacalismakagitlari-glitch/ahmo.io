@@ -64,7 +64,7 @@
         }
         #winnerText { font-size: 26px; font-weight: bold; color: #ffffff; margin-bottom: 20px; }
 
-        /* MOBİL RESPONSIVE CANVAS */
+        /* RESPONSIVE CANVAS */
         #canvasContainer {
             position: relative; width: 100vw; height: 100vh;
             display: flex; align-items: center; justify-content: center;
@@ -104,7 +104,18 @@
     <!-- 1. ANA MENÜ -->
     <div class="panel" id="mainMenu">
         <h1>ahmo.io</h1>
+        
         <input type="text" id="playerName" placeholder="İsmini Yaz" maxlength="10">
+        
+        <!-- CİHAZ SEÇİMİ GERİ GELDİ -->
+        <div class="row">
+            <label style="font-size: 13px; color: #94a3b8; white-space: nowrap;">Cihaz:</label>
+            <select id="deviceSelect">
+                <option value="pc">Bilgisayar (Klavye / WASD)</option>
+                <option value="mobile">Mobil (Dokunmatik Joystick)</option>
+            </select>
+        </div>
+
         <button class="btn btn-primary" onclick="showLobbyList()">OYNA</button>
         <button class="btn" onclick="showCreateScreen()">Lobi Oluştur</button>
     </div>
@@ -120,7 +131,7 @@
         <button class="btn btn-danger" onclick="backToMain()">Geri</button>
     </div>
 
-    <!-- 3. LOBİ OLUŞTURMA (BUG KORUMALI) -->
+    <!-- 3. LOBİ OLUŞTURMA -->
     <div class="panel" id="createMenu" style="display: none;">
         <h2>Lobi Ayarları</h2>
         <label style="font-size: 13px; color: #94a3b8;">Harita:</label>
@@ -182,6 +193,7 @@ let players = {};
 let powerUps = [];
 let isSeeker = false;
 let gameState = "WAITING";
+let isMobileMode = false;
 
 // Power-Up Durumları
 let speedBuff = false;
@@ -194,7 +206,7 @@ const myPlayer = {
     viewDistance: 130
 };
 
-// PİNG HESAPLAMA SİSTEMİ
+// PİNG SİSTEMİ
 setInterval(() => {
     socket.emit("pingCheck", Date.now());
 }, 2000);
@@ -319,7 +331,12 @@ function showLobbyList() {
     socket.emit("getPublicLobbies");
 }
 
+function checkDeviceSelection() {
+    isMobileMode = document.getElementById("deviceSelect").value === "mobile";
+}
+
 function submitCreateLobby() {
+    checkDeviceSelection();
     socket.emit("joinOrCreate", {
         action: "create",
         name: document.getElementById("playerName").value,
@@ -333,6 +350,7 @@ function submitCreateLobby() {
 }
 
 function joinByCode() {
+    checkDeviceSelection();
     socket.emit("joinOrCreate", {
         action: "join",
         name: document.getElementById("playerName").value,
@@ -361,6 +379,7 @@ socket.on("publicLobbiesList", list => {
 });
 
 function joinSpecific(id) {
+    checkDeviceSelection();
     socket.emit("joinOrCreate", {
         action: "join",
         name: document.getElementById("playerName").value,
@@ -378,9 +397,8 @@ socket.on("joinedSuccess", data => {
     document.getElementById("hud").style.display = "flex";
     canvas.style.display = "block";
 
-    if ('ontouchstart' in window) {
-        document.getElementById("joystickZone").style.display = "block";
-    }
+    // Cihaz seçimine göre Joystick aç / kapa
+    document.getElementById("joystickZone").style.display = isMobileMode ? "block" : "none";
 });
 
 socket.on("playerListUpdate", data => {
@@ -411,14 +429,14 @@ socket.on("powerUpApplied", d => {
     if (d.collectorId === myId) {
         if (d.type === "speed") {
             speedBuff = true;
-            setTimeout(() => speedBuff = false, 8000); // 8sn Hız
+            setTimeout(() => speedBuff = false, 8000);
         } else if (d.type === "phantom") {
             isPhantom = true;
             socket.emit("setPhantom", true);
             setTimeout(() => {
                 isPhantom = false;
                 socket.emit("setPhantom", false);
-            }, 5000); // 5sn Görünmezlik
+            }, 5000);
         }
     }
 });
@@ -488,7 +506,7 @@ function update() {
     if (keys['d'] || keys['arrowright']) mx += 1;
 
     let baseSpeed = isSeeker ? myPlayer.baseSeekerSpeed : myPlayer.baseHiderSpeed;
-    if (speedBuff) baseSpeed *= 1.10; // %10 Hızlandırma Power-up'ı
+    if (speedBuff) baseSpeed *= 1.10;
 
     if (mx !== 0 && my !== 0 && joyVec.x === 0) { mx *= 0.7071; my *= 0.7071; }
 
@@ -503,14 +521,14 @@ function update() {
 
     if (mx !== 0 || my !== 0) socket.emit("playerMove", { x: myPlayer.x, y: myPlayer.y });
 
-    // Power-Up Toplama Kontrolü
+    // Power-Up Toplama
     powerUps.forEach(p => {
         if (Math.hypot(p.x - myPlayer.x, p.y - myPlayer.y) < 20) {
             socket.emit("collectPowerUp", p.id);
         }
     });
 
-    // Arayan Yakalama Kontrolü
+    // Arayan Yakalama
     if (isSeeker && gameState === "SEEKING") {
         for (let id in players) {
             if (id !== myId && players[id].isAlive && !players[id].isSeeker) {
@@ -565,18 +583,17 @@ function draw() {
     // POWER-UP ÇİZİMİ
     powerUps.forEach(p => {
         ctx.beginPath(); ctx.arc(p.x, p.y, 10, 0, Math.PI*2);
-        ctx.fillStyle = (p.type === "speed") ? "#eab308" : "#a855f7"; // Sarı (Hız) | Mor (Phantom)
+        ctx.fillStyle = (p.type === "speed") ? "#eab308" : "#a855f7";
         ctx.fill();
         ctx.fillStyle = "#fff"; ctx.font = "12px sans-serif"; ctx.textAlign = "center";
         ctx.fillText(p.type === "speed" ? "⚡" : "👻", p.x, p.y + 4);
     });
 
-    // DİĞER OYUNCULARI ÇİZ (İsimleriyle)
+    // DİĞER OYUNCULARI ÇİZ
     for (let id in players) {
         if (id === myId || !players[id].isAlive) continue;
         let p = players[id];
 
-        // Phantom olan görünmezdir!
         if (p.isPhantom) continue;
 
         ctx.beginPath(); ctx.arc(p.x, p.y, 12, 0, Math.PI * 2);
@@ -584,7 +601,6 @@ function draw() {
         ctx.fill();
         ctx.strokeStyle = "#fff"; ctx.stroke();
 
-        // Oyuncu İsmi
         ctx.fillStyle = "#ffffff"; ctx.font = "bold 11px sans-serif"; ctx.textAlign = "center";
         ctx.fillText(p.name || "Oyuncu", p.x, p.y - 16);
     }
@@ -594,11 +610,10 @@ function draw() {
     // KENDİNİ ÇİZ
     ctx.beginPath(); ctx.arc(myPlayer.x, myPlayer.y, myPlayer.radius, 0, Math.PI * 2);
     ctx.fillStyle = isSeeker ? "#ef4444" : "#0284c7";
-    if (isPhantom) ctx.fillStyle = "rgba(56, 189, 248, 0.4)"; // Kendine yarı saydam görünürsün
+    if (isPhantom) ctx.fillStyle = "rgba(56, 189, 248, 0.4)";
     ctx.fill();
     ctx.lineWidth = 2; ctx.strokeStyle = "#fff"; ctx.stroke();
 
-    // Kendi İsmin
     ctx.fillStyle = "#38bdf8"; ctx.font = "bold 12px sans-serif"; ctx.textAlign = "center";
     ctx.fillText(document.getElementById("playerName").value || "Ben", myPlayer.x, myPlayer.y - 16);
 }
