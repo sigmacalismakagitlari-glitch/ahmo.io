@@ -9,8 +9,6 @@ const io = new Server(server);
 app.use(express.static('public'));
 
 const rooms = {};
-
-// Harita Doğma Noktaları
 const SPAWN_POINTS = {
     labirent: { x: 730, y: 530 },
     bahce: { x: 730, y: 530 },
@@ -21,12 +19,14 @@ function generateRoomCode() {
     return Math.random().toString(36).substring(2, 6).toUpperCase();
 }
 
-function spawnCoin(room) {
-    if (room.coins.length >= 8) return;
-    room.coins.push({
+function spawnPowerUp(room) {
+    if (room.powerUps.length >= 3) return;
+    const type = Math.random() < 0.5 ? "speed" : "phantom";
+    room.powerUps.push({
         id: Math.random().toString(36).substr(2, 9),
-        x: Math.floor(Math.random() * 680) + 60,
-        y: Math.floor(Math.random() * 480) + 60
+        type: type,
+        x: Math.floor(Math.random() * 660) + 70,
+        y: Math.floor(Math.random() * 460) + 70
     });
 }
 
@@ -37,33 +37,30 @@ function startRoomGame(roomId) {
     const playerIds = Object.keys(room.players);
     if (playerIds.length < 2) return;
 
-    const seekerCount = playerIds.length > 5 ? 2 : 1;
+    // Arayan ve Saklanan rollerini dağıt
     const shuffled = [...playerIds].sort(() => 0.5 - Math.random());
-    const seekers = shuffled.slice(0, seekerCount);
+    const seekers = shuffled.slice(0, room.seekerCount);
 
     const spawn = SPAWN_POINTS[room.map] || { x: 730, y: 530 };
 
     playerIds.forEach(id => {
         room.players[id].isSeeker = seekers.includes(id);
         room.players[id].isAlive = true;
-        room.players[id].isFrozen = false;
         room.players[id].x = spawn.x;
         room.players[id].y = spawn.y;
+        room.players[id].isPhantom = false;
     });
 
     room.state = "HIDING";
     room.timer = 15;
-    room.traps = [];
-    room.coins = [];
-
-    for (let i = 0; i < 5; i++) spawnCoin(room);
+    room.powerUps = [];
 
     io.to(roomId).emit("gameStarted", {
         state: room.state,
         timer: room.timer,
         players: room.players,
         map: room.map,
-        coins: room.coins
+        powerUps: room.powerUps
     });
 
     if (room.interval) clearInterval(room.interval);
@@ -71,30 +68,31 @@ function startRoomGame(roomId) {
     room.interval = setInterval(() => {
         room.timer--;
 
-        // Coin doğurma
-        if (Math.random() < 0.3) spawnCoin(room);
+        // Nadiren Power-Up Doğur (Her 15 saniyede bir şans)
+        if (Math.random() < 0.25) {
+            spawnPowerUp(room);
+            io.to(roomId).emit("powerUpSync", room.powerUps);
+        }
 
         if (room.state === "HIDING" && room.timer <= 0) {
             room.state = "SEEKING";
             room.timer = 90;
         } else if (room.state === "SEEKING" && room.timer <= 0) {
             room.state = "GAME_OVER";
-            io.to(roomId).emit("gameOver", { winner: "HIDERS" });
+            io.to(roomId).emit("gameOver", { winner: "Saklananlar Kazandı! 🏆" });
             clearInterval(room.interval);
-            setTimeout(() => resetRoom(roomId), 4000);
             return;
         }
 
         const aliveHiders = Object.values(room.players).filter(p => !p.isSeeker && p.isAlive);
         if (room.state === "SEEKING" && aliveHiders.length === 0) {
             room.state = "GAME_OVER";
-            io.to(roomId).emit("gameOver", { winner: "SEEKERS" });
+            io.to(roomId).emit("gameOver", { winner: "Arayanlar Kazandı! 😈" });
             clearInterval(room.interval);
-            setTimeout(() => resetRoom(roomId), 4000);
             return;
         }
 
-        io.to(roomId).emit("timerUpdate", { state: room.state, timer: room.timer, coins: room.coins });
+        io.to(roomId).emit("timerUpdate", { state: room.state, timer: room.timer });
     }, 1000);
 }
 
@@ -103,12 +101,11 @@ function resetRoom(roomId) {
     if (!room) return;
     room.state = "WAITING";
     room.timer = 0;
-    room.traps = [];
-    room.coins = [];
+    room.powerUps = [];
     Object.keys(room.players).forEach(id => {
         room.players[id].isSeeker = false;
         room.players[id].isAlive = true;
-        room.players[id].isFrozen = false;
+        room.players[id].isPhantom = false;
     });
     io.to(roomId).emit("roomReset", { state: room.state, players: room.players });
 }
@@ -116,15 +113,23 @@ function resetRoom(roomId) {
 io.on('connection', (socket) => {
     let currentRoom = null;
 
+    // Ping Hesaplama
+    socket.on("pingCheck", (clientTime) => {
+        socket.emit("pongCheck", clientTime);
+    });
+
     // Açık lobileri listele
     socket.on("getPublicLobbies", () => {
         const list = [];
         for (let id in rooms) {
             if (!rooms[id].isPrivate && rooms[id].state === "WAITING") {
                 list.push({
-                    id, map: rooms[id].map,
+                    id,
+                    map: rooms[id].map,
                     playersCount: Object.keys(rooms[id].players).length,
-                    maxPlayers: rooms[id].maxPlayers
+                    maxPlayers: rooms[id].maxPlayers,
+                    seekerCount: rooms[id].seekerCount,
+                    hiderCount: rooms[id].hiderCount
                 });
             }
         }
@@ -132,27 +137,32 @@ io.on('connection', (socket) => {
     });
 
     // Lobi Oluştur veya Katıl
-    socket.on("joinOrCreate", ({ action, map, maxPlayers, isPrivate, customCode, roomId }) => {
+    socket.on("joinOrCreate", ({ action, name, map, maxPlayers, seekerCount, hiderCount, isPrivate, customCode, roomId }) => {
         let targetId = null;
 
         if (action === "create") {
             targetId = (customCode && customCode.trim() !== "") ? customCode.toUpperCase().trim() : generateRoomCode();
+            const total = parseInt(maxPlayers) || 5;
+            const seekers = Math.min(total - 1, Math.max(1, parseInt(seekerCount) || 1));
+            const hiders = total - seekers;
+
             rooms[targetId] = {
                 map: map || "labirent",
-                maxPlayers: Math.max(2, Math.min(10, parseInt(maxPlayers) || 5)),
+                maxPlayers: total,
+                seekerCount: seekers,
+                hiderCount: hiders,
                 isPrivate: !!isPrivate,
                 state: "WAITING",
                 timer: 0,
                 players: {},
-                coins: [],
-                traps: []
+                powerUps: []
             };
         } else if (action === "join") {
             const code = (roomId || "").toUpperCase().trim();
             if (rooms[code] && Object.keys(rooms[code].players).length < rooms[code].maxPlayers && rooms[code].state === "WAITING") {
                 targetId = code;
             } else {
-                return socket.emit("errorMsg", "Lobi bulunamadı veya dolu!");
+                return socket.emit("errorMsg", "Lobi bulunamadı veya oyun başlamış!");
             }
         }
 
@@ -164,11 +174,12 @@ io.on('connection', (socket) => {
 
         room.players[socket.id] = {
             id: socket.id,
+            name: (name && name.trim() !== "") ? name.trim().substring(0, 10) : "Oyuncu",
             x: spawn.x,
             y: spawn.y,
             isSeeker: false,
             isAlive: true,
-            isFrozen: false
+            isPhantom: false
         };
 
         socket.emit("joinedSuccess", {
@@ -187,65 +198,31 @@ io.on('connection', (socket) => {
         }
     });
 
-    // Hareket
     socket.on("playerMove", (data) => {
         if (currentRoom && rooms[currentRoom] && rooms[currentRoom].players[socket.id]) {
-            if (rooms[currentRoom].players[socket.id].isFrozen) return;
             rooms[currentRoom].players[socket.id].x = data.x;
             rooms[currentRoom].players[socket.id].y = data.y;
             socket.to(currentRoom).emit("playerMoved", { id: socket.id, x: data.x, y: data.y });
         }
     });
 
-    // Coin Toplama
-    socket.on("collectCoin", (coinId) => {
+    // Power-Up Toplama
+    socket.on("collectPowerUp", (pId) => {
         if (!currentRoom || !rooms[currentRoom]) return;
         const room = rooms[currentRoom];
-        const index = room.coins.findIndex(c => c.id === coinId);
-        if (index !== -1) {
-            room.coins.splice(index, 1);
-            io.to(currentRoom).emit("coinCollected", { coinId, collectorId: socket.id });
+        const idx = room.powerUps.findIndex(p => p.id === pId);
+        if (idx !== -1) {
+            const p = room.powerUps[idx];
+            room.powerUps.splice(idx, 1);
+            io.to(currentRoom).emit("powerUpApplied", { powerUpId: pId, collectorId: socket.id, type: p.type });
         }
     });
 
-    // Tuzak Kurma
-    socket.on("placeTrap", ({ type, x, y }) => {
-        if (!currentRoom || !rooms[currentRoom]) return;
-        const trap = { id: Math.random().toString(36).substr(2, 9), type, x, y, ownerId: socket.id };
-        rooms[currentRoom].traps.push(trap);
-        io.to(currentRoom).emit("trapPlaced", trap);
-    });
-
-    // Tuzağa Basma
-    socket.on("triggerTrap", (trapId) => {
-        if (!currentRoom || !rooms[currentRoom]) return;
-        const room = rooms[currentRoom];
-        const trapIndex = room.traps.findIndex(t => t.id === trapId);
-        if (trapIndex === -1) return;
-
-        const trap = room.traps[trapIndex];
-        const victim = room.players[socket.id];
-        if (!victim || !victim.isAlive) return;
-
-        // Yapışkan tuzak (Hider kurar, Seeker'ı 3s dondurur)
-        if (trap.type === "sticky" && victim.isSeeker) {
-            room.traps.splice(trapIndex, 1);
-            victim.isFrozen = true;
-            io.to(currentRoom).emit("trapTriggered", { trapId, victimId: socket.id, duration: 3 });
-            setTimeout(() => {
-                if (victim) victim.isFrozen = false;
-                io.to(currentRoom).emit("playerUnfrozen", socket.id);
-            }, 3000);
-        }
-        // Jail tuzak (Seeker kurar, Hider'ı 5s dondurur ve yerini gösterir)
-        else if (trap.type === "jail" && !victim.isSeeker) {
-            room.traps.splice(trapIndex, 1);
-            victim.isFrozen = true;
-            io.to(currentRoom).emit("trapTriggered", { trapId, victimId: socket.id, duration: 5, alertSeeker: true, x: victim.x, y: victim.y });
-            setTimeout(() => {
-                if (victim) victim.isFrozen = false;
-                io.to(currentRoom).emit("playerUnfrozen", socket.id);
-            }, 5000);
+    // Görünmezlik Senkronizasyonu
+    socket.on("setPhantom", (isPhantom) => {
+        if (currentRoom && rooms[currentRoom]?.players[socket.id]) {
+            rooms[currentRoom].players[socket.id].isPhantom = isPhantom;
+            socket.to(currentRoom).emit("playerPhantomUpdate", { id: socket.id, isPhantom });
         }
     });
 
@@ -256,6 +233,19 @@ io.on('connection', (socket) => {
         if (room.players[socket.id]?.isSeeker && room.players[targetId]?.isAlive) {
             room.players[targetId].isAlive = false;
             io.to(currentRoom).emit("playerCaught", { targetId });
+        }
+    });
+
+    // Lobiden Ayrılma
+    socket.on("leaveRoom", () => {
+        if (currentRoom && rooms[currentRoom]) {
+            delete rooms[currentRoom].players[socket.id];
+            io.to(currentRoom).emit("playerLeft", socket.id);
+            if (Object.keys(rooms[currentRoom].players).length === 0) {
+                if (rooms[currentRoom].interval) clearInterval(rooms[currentRoom].interval);
+                delete rooms[currentRoom];
+            }
+            currentRoom = null;
         }
     });
 
@@ -274,4 +264,4 @@ io.on('connection', (socket) => {
 });
 
 const PORT = process.env.PORT || 3000;
-server.listen(PORT, () => console.log(`🚀 ahmo.io sunucusu port ${PORT}'de aktif!`));
+server.listen(PORT, () => console.log(`🚀 ahmo.io port ${PORT}'de hazır!`));
